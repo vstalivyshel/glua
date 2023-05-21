@@ -1,4 +1,4 @@
-Layer between the luau compiler and the Kakoune text editor.
+Layer between the lua interpreter and the Kakoune text editor.
 I'm just experimenting with language, sockets, and some APIs. Pretty much useless.
 
 The only interesting thing that you may find here is this chunk of code,
