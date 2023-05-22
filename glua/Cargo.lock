@@ -24,19 +24,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "50d30906286121d95be3d479533b458f87493b30a4b5f79a607db8f5d11aa91f"
 
 [[package]]
-name = "gluau"
-version = "0.1.0"
+name = "glua"
+version = "0.0.1"
 dependencies = [
  "mlua",
-]
-
-[[package]]
-name = "luau0-src"
-version = "0.5.7+luau576"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5770823afa1f4d1485dac656a8092d08cbf997a4dcbf6ae6f2db92c17eb3109a"
-dependencies = [
- "cc",
 ]
 
 [[package]]
@@ -53,7 +44,6 @@ checksum = "07366ed2cd22a3b000aed076e2b68896fb46f06f1f5786c5962da73c0af01577"
 dependencies = [
  "bstr",
  "cc",
- "luau0-src",
  "num-traits",
  "once_cell",
  "pkg-config",
