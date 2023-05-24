@@ -88,45 +88,48 @@ fn kak_send_msg(session: &str, msg: &str) -> Result<()> {
 
 fn run() -> Result<()> {
     let mut args = env::args().skip(1).collect::<VecDeque<String>>();
-    let args_len = args.len();
-    if args_len < 1 {
+    let sub = if let Some(cmd) = args.pop_front() {
+        cmd
+    } else {
         return Ok(eprintln!("fail wrong argument count"));
-    }
+    };
 
-    match args.pop_front().unwrap().as_str() {
-        "pipe" => {
-            if args_len >= 1 {
-                let fifo = temp_fifo()?;
-                println!("{p}", p = &fifo.path);
-                let mut cmd = Command::new(&args.pop_front().unwrap())
-                    .args(args.make_contiguous())
-                    .stdout(Stdio::piped())
-                    .stderr(Stdio::piped())
-                    .spawn()?;
-                let fifo_path = Path::new(&fifo.path);
+    match sub.as_str() {
+        "pipe" if args.len() >= 1 => {
+            let shell_cmd = args.pop_front().unwrap();
+            if shell_cmd.is_empty() {
+                return Ok(eprintln!("fail invalid argument to `pipe` subcommand"));
+            }
+            let fifo = temp_fifo()?;
+            println!("{p}", p = &fifo.path);
+            let mut cmd = Command::new(shell_cmd)
+                .args(args.make_contiguous())
+                .stdout(Stdio::piped())
+                .stderr(Stdio::piped())
+                .spawn()?;
+            let fifo_path = Path::new(&fifo.path);
 
-                let stdout = cmd.stdout.take().unwrap();
-                let stderr = cmd.stderr.take().unwrap();
-                let reader = BufReader::new(stdout.chain(stderr));
+            let stdout = cmd.stdout.take().unwrap();
+            let stderr = cmd.stderr.take().unwrap();
+            let reader = BufReader::new(stdout.chain(stderr));
 
-                daemonize()?;
-                let fifo: fs::File = match fs::OpenOptions::new().write(true).open(fifo_path) {
-                    Err(_) => return Ok(()),
-                    Ok(f) => f,
+            daemonize()?;
+            let fifo: fs::File = match fs::OpenOptions::new().write(true).open(fifo_path) {
+                Ok(f) => f,
+                Err(_) => return Ok(()),
+            };
+
+            let mut writer = BufWriter::new(fifo);
+            for out in reader.split(b'\n') {
+                let mut out = match out {
+                    Ok(o) => o,
+                    Err(e) => e.to_string().into_bytes(),
                 };
-
-                let mut writer = BufWriter::new(fifo);
-                for out in reader.split(b'\n') {
-                    let mut out = match out {
-                        Ok(o) => o,
-                        Err(e) => e.to_string().into_bytes(),
-                    };
-                    out.push(b'\n');
-                    let _ = writer.write_all(out.as_slice());
-                }
+                out.push(b'\n');
+                let _ = writer.write_all(out.as_slice());
             }
         }
-        "eval" if args_len >= 2 => kak_send_msg(
+        "eval" if args.len() >= 2 => kak_send_msg(
             &args.pop_front().unwrap(),
             &args
                 .into_iter()
@@ -136,7 +139,7 @@ fn run() -> Result<()> {
                 })
                 .collect::<String>(),
         )?,
-        "evalall" if args_len >= 1 => {
+        "evalall" if args.len() >= 1 => {
             let glua_list = Command::new("kak")
                 .args(["-l"])
                 .stdout(Stdio::piped())
@@ -156,7 +159,24 @@ fn run() -> Result<()> {
                 kak_send_msg(ses, &cmd)?;
             }
         }
-        _ => {}
+        _ => eprintln!(
+            "fail failed to run \"{cmd}\"",
+            cmd = {
+                let mut cmd = sub;
+                cmd.push(' ');
+                cmd.push_str(
+                    &args
+                        .into_iter()
+                        .map(|mut a| {
+                            a.push(' ');
+                            a
+                        })
+                        .collect::<String>()
+                        .trim(),
+                );
+                cmd
+            }
+        ),
     }
 
     Ok(())
