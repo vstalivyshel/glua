@@ -5,14 +5,12 @@ instead of using "kak -p":
 
 ```rust
 fn encode(msg: &str) -> Vec<u8> {
+    let msg_len = msg.len();
     let mut result = Vec::<u8>::with_capacity(msg.len() + 9);
-    result.splice(..0, (msg.len() as u32).to_ne_bytes()); // Length of a msg string
+    result.push(b'\x02');
+    (msg_len as u32 + 4 + 5).to_ne_bytes().into_iter().for_each(|b| result.push(b));
+    (msg_len as u32).to_ne_bytes().into_iter().for_each(|b| result.push(b));
     msg.bytes().for_each(|b| result.push(b));
-    result.splice(..0, (result.len() as u32 + 5).to_ne_bytes()); // Length of the whole encoded message
-                                                                 // and + 5 for some reason
-                                                                
-    result.insert(0, b'\x02'); // Tells to the editor that the message is a command
-                               // This is basically index of enum's variant from source code
 
     // For example:
     //
