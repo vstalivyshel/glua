@@ -149,10 +149,7 @@ fn run() -> Result<()> {
 }
 
 fn main() {
-    let n = "halo";
-    let b = encode(n);
-    println!("{b:?}");
-    // if let Err(some_er) = run() {
-    //     eprintln!("fail {some_er}");
-    // }
+    if let Err(some_er) = run() {
+        eprintln!("fail {some_er}");
+    }
 }
