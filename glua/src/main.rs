@@ -1,5 +1,4 @@
 use std::{
-    collections::VecDeque,
     env,
     ffi::CString,
     fs,
@@ -52,18 +51,12 @@ fn daemonize() -> Result<()> {
 
 fn temp_fifo() -> Result<TempFile> {
     let holder = TempFile::in_tempdir("glua_temp_fifo");
-    create_fifo(holder.path.as_ref(), 0o777)?;
-
-    Ok(holder)
-}
-
-fn create_fifo(path: &str, mode: u32) -> Result<()> {
-    let path = CString::new(path).unwrap();
-    if unsafe { mkfifo(path.as_ptr(), mode) != 0 } {
+    let path = CString::new(holder.path.as_str()).unwrap();
+    if unsafe { mkfifo(path.as_ptr(), 0o777) != 0 } {
         return Err(io::Error::last_os_error());
     }
 
-    Ok(())
+    Ok(holder)
 }
 
 fn encode(msg: &str) -> Vec<u8> {
@@ -87,8 +80,8 @@ fn kak_send_msg(session: &str, msg: &str) -> Result<()> {
 }
 
 fn run() -> Result<()> {
-    let mut args = env::args().skip(1).collect::<VecDeque<String>>();
-    let sub = if let Some(cmd) = args.pop_front() {
+    let mut args = env::args().skip(1);
+    let sub = if let Some(cmd) = args.next() {
         cmd
     } else {
         return Ok(eprintln!("fail wrong argument count"));
@@ -96,25 +89,30 @@ fn run() -> Result<()> {
 
     match sub.as_str() {
         "pipe" if args.len() >= 1 => {
-            let shell_cmd = args.pop_front().unwrap();
-            if shell_cmd.is_empty() {
+            let cmd = args.next().unwrap();
+            if cmd.is_empty() {
                 return Ok(eprintln!("fail invalid argument to `pipe` subcommand"));
             }
-            let fifo = temp_fifo()?;
-            println!("{p}", p = &fifo.path);
-            let mut cmd = Command::new(shell_cmd)
-                .args(args.make_contiguous())
+
+            let mut child = Command::new(&cmd)
+                .args(args.collect::<Vec<String>>().as_slice())
                 .stdout(Stdio::piped())
                 .stderr(Stdio::piped())
                 .spawn()?;
-            let fifo_path = Path::new(&fifo.path);
 
-            let stdout = cmd.stdout.take().unwrap();
-            let stderr = cmd.stderr.take().unwrap();
+            let stdout = child.stdout.take().unwrap();
+            let stderr = child.stderr.take().unwrap();
             let reader = BufReader::new(stdout.chain(stderr));
 
+            let fifo = temp_fifo()?;
+            println!("{p}", p = &fifo.path);
+
             daemonize()?;
-            let fifo: fs::File = match fs::OpenOptions::new().write(true).open(fifo_path) {
+
+            let fifo: fs::File = match fs::OpenOptions::new()
+                .write(true)
+                .open(Path::new(&fifo.path))
+            {
                 Ok(f) => f,
                 Err(_) => return Ok(()),
             };
@@ -129,50 +127,18 @@ fn run() -> Result<()> {
                 let _ = writer.write_all(out.as_slice());
             }
         }
-        "eval" if args.len() >= 2 => kak_send_msg(
-            &args.pop_front().unwrap(),
-            &args
-                .into_iter()
-                .map(|mut a| {
-                    a.push(' ');
-                    a
-                })
-                .collect::<String>(),
-        )?,
-        "evalall" if args.len() >= 1 => {
-            let glua_list = Command::new("kak")
-                .args(["-l"])
-                .stdout(Stdio::piped())
-                .output()?;
-
-            let sessions = String::from_utf8(glua_list.stdout).unwrap();
-
-            let cmd = args
-                .into_iter()
-                .map(|mut a| {
-                    a.push(' ');
-                    a
-                })
-                .collect::<String>();
-
-            for ses in sessions.trim().split('\n') {
-                kak_send_msg(ses, &cmd)?;
-            }
-        }
         _ => eprintln!(
             "fail failed to run \"{cmd}\"",
             cmd = {
                 let mut cmd = sub;
                 cmd.push(' ');
                 cmd.push_str(
-                    &args
-                        .into_iter()
-                        .map(|mut a| {
-                            a.push(' ');
-                            a
-                        })
-                        .collect::<String>()
-                        .trim(),
+                    args.map(|mut a| {
+                        a.push(' ');
+                        a
+                    })
+                    .collect::<String>()
+                    .trim(),
                 );
                 cmd
             }
@@ -183,7 +149,10 @@ fn run() -> Result<()> {
 }
 
 fn main() {
-    if let Err(some_er) = run() {
-        eprintln!("fail {some_er}");
-    }
+    let n = "halo";
+    let b = encode(n);
+    println!("{b:?}");
+    // if let Err(some_er) = run() {
+    //     eprintln!("fail {some_er}");
+    // }
 }
