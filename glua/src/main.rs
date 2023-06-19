@@ -60,11 +60,12 @@ fn temp_fifo() -> Result<TempFile> {
 }
 
 fn encode(msg: &str) -> Vec<u8> {
+    let msg_len = msg.len();
     let mut result = Vec::<u8>::with_capacity(msg.len() + 9);
-    result.splice(..0, (msg.len() as u32).to_ne_bytes());
+    result.push(b'\x02');
+    (msg_len as u32 + 4 + 5).to_ne_bytes().into_iter().for_each(|b| result.push(b));
+    (msg_len as u32).to_ne_bytes().into_iter().for_each(|b| result.push(b));
     msg.bytes().for_each(|b| result.push(b));
-    result.splice(..0, (result.len() as u32 + 5).to_ne_bytes());
-    result.insert(0, b'\x02');
 
     result
 }
@@ -149,7 +150,8 @@ fn run() -> Result<()> {
 }
 
 fn main() {
-    if let Err(some_er) = run() {
-        eprintln!("fail {some_er}");
-    }
+    println!("{:?}", encode("echo -debug hello; echo -debug %{hello world suka blyad}"));
+    // if let Err(some_er) = run() {
+    //     eprintln!("fail {some_er}");
+    // }
 }
